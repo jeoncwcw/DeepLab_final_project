@@ -14,7 +14,7 @@ def top_1_metric(model, test_loader, device):
             if torch.cuda.is_available():
                 correct += (predicted.cpu() == labels.cpu()).sum()
             else:
-                correct += (predicted == labels).sum
+                correct += (predicted == labels).sum()
     
     accuracy = 100 * correct.item() / total
     return accuracy
