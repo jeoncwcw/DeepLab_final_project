@@ -16,17 +16,23 @@ def get_dataloader(mode="unbalanced"):
     from torchvision import datasets, transforms
     from torch.utils.data import DataLoader, Subset
     import numpy as np
+    from copy import deepcopy
     
     torch.manual_seed(42); rd.seed(42); np.random.seed(42)
 
-    transform = transforms.Compose([
+    train_tf = transforms.Compose([
         transforms.RandomResizedCrop(32),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     ])
-    full_dataset = datasets.CIFAR100(root='../CIFAR100', train=True, download=True, transform=transform)
+    
+    test_tf = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5071,0.4867,0.4408),(0.2675,0.2565,0.2761))
+    ])
+    full_dataset = datasets.CIFAR100(root='../CIFAR100', train=True, download=True, transform=None)
 
     targets = np.array(full_dataset.targets)
     class_indices = {i:np.where(targets == i)[0].tolist() for i in range(100)}
@@ -51,11 +57,16 @@ def get_dataloader(mode="unbalanced"):
             selected = rd.sample(indices, 450 - 4*i)
             train_indices.extend(selected)
     
-    train_dataset = Subset(full_dataset, train_indices)
-    test_dataset  = Subset(full_dataset, test_indices)
+    train_ds = deepcopy(full_dataset)
+    test_ds = deepcopy(full_dataset)
+    train_ds.transform = train_tf
+    test_ds.transform = test_tf
+    
+    train_dataset = Subset(train_ds, train_indices)
+    test_dataset  = Subset(test_ds, test_indices)
 
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-    test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False, drop_last=False)
+    test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
     return train_loader, test_loader
     
