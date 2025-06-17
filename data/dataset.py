@@ -53,7 +53,7 @@ def get_dataloader(mode="unbalanced", split = False):
 
     train_indices = list()
 
-    if mode == "balanced":
+    if mode.lower() == "balanced":
         for i in range(100):
             indices = class_indices[i]
             selected = rd.sample(indices, 450)
