@@ -1,4 +1,4 @@
-def get_dataloader(mode="unbalanced"):
+def get_dataloader(mode="unbalanced", split = False):
     '''
     get_dataloader 함수는 CIFAR-100 데이터셋에서 
     mode에 따라 balanced(균형) 또는 unbalanced(불균형) 학습용 DataLoader와 
@@ -6,10 +6,17 @@ def get_dataloader(mode="unbalanced"):
 
     입력:
         mode: "balanced" 또는 "unbalanced" (기본값 "unbalanced")
+        split: True이면 head, mid, tail로 분할된 DataLoader를 반환 (기본값 False)
+        split이 True인 경우, head(0-33), mid(34-66), tail(67-99) 클래스로 분할하여 각각의 DataLoader 반환
 
     반환:
-        train_loader: 학습 데이터셋 DataLoader
-        test_loader:  테스트 데이터셋 DataLoader
+        1. split = False:
+            train_loader: 학습 데이터셋 DataLoader
+            test_loader:  테스트 데이터셋 DataLoader
+        2. split = True:
+            {(head_train, head_test),
+            (mid_train, mid_test),
+            (tail_train, tail_test)}
     '''
     import torch
     import random as rd
@@ -62,11 +69,29 @@ def get_dataloader(mode="unbalanced"):
     train_ds.transform = train_tf
     test_ds.transform = test_tf
     
-    train_dataset = Subset(train_ds, train_indices)
-    test_dataset  = Subset(test_ds, test_indices)
-
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-    test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
-
-    return train_loader, test_loader
+    if not split:
+        train_dataset = Subset(train_ds, train_indices)
+        test_dataset  = Subset(test_ds, test_indices)
+        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+        test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
+        return train_loader, test_loader
     
+    head_cls = range(0, 34)
+    mid_cls = range(34, 67)
+    tail_cls = range(67, 100)
+    
+    def filter_indices(indices, classes):
+        targets_sel = np.array(full_dataset.targets)[indices]
+        mask = np.isin(targets_sel, classes)
+        return list(np.array(indices)[mask])
+    
+    sets = {}
+    for name, cls_range in zip(['head', 'mid', 'tail'], [head_cls, mid_cls, tail_cls]):
+        train_idx = filter_indices(train_indices, cls_range)
+        test_idx = filter_indices(test_indices, cls_range)
+        train_subset = Subset(train_ds, train_idx)
+        test_subset = Subset(test_ds, test_idx)
+        train_loader = DataLoader(train_subset, batch_size=64, shuffle=True)
+        test_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
+        sets[name] = (train_loader, test_loader)
+    return sets['head'], sets['mid'], sets['tail']
