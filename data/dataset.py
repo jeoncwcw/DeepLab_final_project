@@ -13,6 +13,7 @@ def get_dataloader(mode="unbalanced", split = False):
         1. split = False:
             train_loader: 학습 데이터셋 DataLoader
             test_loader:  테스트 데이터셋 DataLoader
+            cls_num_list: 학습 데이터셋의 클래스별 샘플 수 리스트
         2. split = True:
             {(head_train, head_test),
             (mid_train, mid_test),
@@ -68,13 +69,17 @@ def get_dataloader(mode="unbalanced", split = False):
     test_ds = deepcopy(full_dataset)
     train_ds.transform = train_tf
     test_ds.transform = test_tf
-    
+
     if not split:
         train_dataset = Subset(train_ds, train_indices)
         test_dataset  = Subset(test_ds, test_indices)
         train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
         test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
-        return train_loader, test_loader
+
+        train_targets = np.array(full_dataset.targets)[train_indices]
+        cls_num_list = [np.sum(train_targets == i) for i in range(100)]
+
+        return train_loader, test_loader, cls_num_list
     
     head_cls = range(0, 34)
     mid_cls = range(34, 67)
@@ -95,3 +100,6 @@ def get_dataloader(mode="unbalanced", split = False):
         test_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
         sets[name] = (train_loader, test_loader)
     return sets['head'], sets['mid'], sets['tail']
+
+
+# _, _ = get_dataloader()
