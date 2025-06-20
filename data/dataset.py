@@ -1,4 +1,10 @@
-def get_dataloader(mode="unbalanced", split = False):
+class TwoCropTransform:
+    def __init__(self, transform):
+        self.transform = transform
+    def __call__(self, x):
+        return [self.transform(x), self.transform(x)]
+
+def get_dataloader(mode="unbalanced", split = False, use_scl=False):
     '''
     get_dataloader 함수는 CIFAR-100 데이터셋에서 
     mode에 따라 balanced(균형) 또는 unbalanced(불균형) 학습용 DataLoader와 
@@ -14,6 +20,7 @@ def get_dataloader(mode="unbalanced", split = False):
             train_loader: 학습 데이터셋 DataLoader
             test_loader:  테스트 데이터셋 DataLoader
             cls_num_list: 학습 데이터셋의 클래스별 샘플 수 리스트
+            use_scl: True이면 SCL 학습을 위해 두 개의 view 반환
         2. split = True:
             {(head_train, head_test),
             (mid_train, mid_test),
@@ -67,8 +74,13 @@ def get_dataloader(mode="unbalanced", split = False):
     
     train_ds = deepcopy(full_dataset)
     test_ds = deepcopy(full_dataset)
-    train_ds.transform = train_tf
+    
+    if use_scl:
+        train_ds.transform = TwoCropTransform(train_tf)
+    else:
+        train_ds.transform = train_tf
     test_ds.transform = test_tf
+
 
     if not split:
         train_dataset = Subset(train_ds, train_indices)
