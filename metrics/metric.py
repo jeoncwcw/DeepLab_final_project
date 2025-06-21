@@ -11,7 +11,9 @@ def top_1_metric(model, test_loader, device, use_scl):
             else:
                 images = images.to(device)
             labels = labels.to(device)
-            if hasattr(model, 'use_scl') and model.use_scl:
+            if hasattr(model, 'training_stage'):
+                outputs = model(images, inference_mode=True)
+            elif hasattr(model, 'use_scl') and model.use_scl:
                 _, outputs = model(images)
             else:
                 outputs = model(images)

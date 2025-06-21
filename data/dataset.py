@@ -36,9 +36,11 @@ def get_dataloader(mode="unbalanced", split = False, use_scl=False):
     torch.manual_seed(42); rd.seed(42); np.random.seed(42)
 
     train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(32),
+        transforms.RandomResizedCrop(32, scale = (0.2, 1.0), ratio=(3/4, 4/3)),
         transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(),
+        transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     ])
@@ -85,8 +87,8 @@ def get_dataloader(mode="unbalanced", split = False, use_scl=False):
     if not split:
         train_dataset = Subset(train_ds, train_indices)
         test_dataset  = Subset(test_ds, test_indices)
-        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-        test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+        test_loader  = DataLoader(test_dataset, batch_size=256, shuffle=False)
 
         train_targets = np.array(full_dataset.targets)[train_indices]
         cls_num_list = [np.sum(train_targets == i) for i in range(100)]
@@ -108,8 +110,8 @@ def get_dataloader(mode="unbalanced", split = False, use_scl=False):
         test_idx = filter_indices(test_indices, cls_range)
         train_subset = Subset(train_ds, train_idx)
         test_subset = Subset(test_ds, test_idx)
-        train_loader = DataLoader(train_subset, batch_size=64, shuffle=True)
-        test_loader = DataLoader(test_subset, batch_size=64, shuffle=False)
+        train_loader = DataLoader(train_subset, batch_size=256, shuffle=True)
+        test_loader = DataLoader(test_subset, batch_size=256, shuffle=False)
         sets[name] = (train_loader, test_loader)
     return sets['head'], sets['mid'], sets['tail']
 

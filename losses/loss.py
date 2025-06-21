@@ -39,61 +39,66 @@ class LDAMLoss(nn.Module):
 
 
 class SupConLoss(nn.Module):
-    def __init__(self, temperature=0.2,  class_weights=None, balance_alpha=0.5):
-        super(SupConLoss, self).__init__()
+    """
+    Supervised Contrastive Loss
+    참고: Khosla et al., 2020 (https://arxiv.org/abs/2004.11362)
+    """
+    def __init__(self, temperature: float = 0.07, cls_num_list = None, weight_power=0.5):
+        super().__init__()
         self.temperature = temperature
-        self.class_weights = class_weights
-        self.balance_alpha = balance_alpha
+        self.weight_power = weight_power
 
-    def forward(self, features, labels=None):
-        if len(features.shape) != 3: raise ValueError("3차원 이어야 함")
+        if cls_num_list is not None:
+            cls_nums = torch.tensor(cls_num_list, dtype=torch.float32)
+            max_n = cls_nums.max()
+            self.cls_weights = (max_n / cls_nums) ** weight_power
+        else:
+            self.cls_weights = None
 
-        device = features.device
-        batch_size = features.shape[0]
-        num_views = features.shape[1]
+    def forward(self, features: torch.Tensor, labels: torch.Tensor):
+        """
+        Args
+        ----
+        features : (B, V, C)  # V = views per sample
+        labels   : (B,)       # int64
+        """
+        if features.ndim != 3:
+            raise ValueError("features shape must be (B, V, C)")
+        device   = features.device        
 
-        labels = labels.repeat(num_views).view(-1, 1)
-        mask = torch.eq(labels, labels.T).float().to(device)
+  
+        B, V, C  = features.shape
 
-        contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
+        # (B*V, C)
+        features = F.normalize(features.reshape(B * V, C), dim=1)
 
-        contrast_feature = F.normalize(contrast_feature, p=2, dim=1)
+        # label mask
+        labels = labels.view(B, 1).repeat(1, V).reshape(-1)
+        mask   = torch.eq(labels.unsqueeze(0), labels.unsqueeze(1)).float().to(device)
 
-        self_contrast_mask = torch.eye(batch_size * num_views, device=device)
-        logits_mask = 1 - self_contrast_mask
-        mask = mask * logits_mask
+        # similarity logits
+        logits  = torch.div(torch.matmul(features, features.T), self.temperature)
 
-        if self.class_weights is not None:
-            class_weights = self.class_weights[labels.squeeze()]
-            class_weights = class_weights.view(-1, 1)
-            mask = mask * class_weights
+        # self-contrast 제거
+        logits_mask = torch.ones_like(mask) - torch.eye(B * V, device=device)
+        mask        = mask * logits_mask
 
-        anchor_dot_contrast = torch.div(
-            torch.matmul(contrast_feature, contrast_feature.T),
-            self.temperature
-        )
+        # stability trick
+        logits_max, _ = logits.max(dim=1, keepdim=True)
+        logits = logits - logits_max.detach()
 
-        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
-        logits = anchor_dot_contrast - logits_max.detach()
+        exp_logits = torch.exp(logits) * logits_mask            # negative weight = 1
+        log_prob   = logits - torch.log(exp_logits.sum(1, keepdim=True))
 
-        exp_logits = torch.exp(logits) * logits_mask
+        mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1).clamp(min=1e-8)
 
-        neg_mask = 1 - mask
-        neg_weights = torch.ones_like(neg_mask) * self.balance_alpha
+        if self.cls_weights is not None:
+            sample_weights = self.cls_weights.to(device)[labels]
+            loss = -(sample_weights * mean_log_prob_pos).sum() / sample_weights.sum()
+        else:
+            loss = -mean_log_prob_pos.mean()
 
-        combined_weights = mask + neg_weights * neg_mask
-        log_prob = logits - torch.log((exp_logits * combined_weights).sum(1, keepdim=True) + 1e-8)
-
-        mask_sum = mask.sum(1)
-        mean_log_prob_pos = (mask * log_prob).sum(1)[mask_sum>0] / (mask_sum[mask_sum > 0] + 1e-8)
-
-        loss = -mean_log_prob_pos
-
-        if loss.numel() == 0:
-            return torch.tensor(0.0).to(device)
-        
-        loss = loss.mean()
-        return loss
+        return loss  * self.temperature / 0.07
 
 
 
@@ -110,15 +115,7 @@ def myLoss(mode = "CrossEntropy", cls_num_list=None):
         if cls_num_list is None:
             raise ValueError("[LDAM Loss를 위해선 cls_num_list 필요]")
         return LDAMLoss(cls_num_list=cls_num_list)
-    elif mode == "SCL":
-        if cls_num_list is not None:
-            cls_num_list = np.array(cls_num_list)
-            class_weights = 1.0 / np.sqrt(cls_num_list)
-            class_weights = class_weights / np.max(class_weights)
-            class_weights = torch.FloatTensor(class_weights)
-            if torch.cuda.is_available():
-                class_weights = class_weights.cuda()
-        else:
-            class_weights = None
-        
-        return SupConLoss(class_weights=class_weights)
+    elif mode.lower() == "scl":
+        if cls_num_list:
+            return SupConLoss(temperature=0.05, cls_num_list=cls_num_list)
+        return SupConLoss(temperature=0.05)
