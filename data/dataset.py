@@ -87,8 +87,8 @@ def get_dataloader(mode="unbalanced", split = False, use_scl=False):
     if not split:
         train_dataset = Subset(train_ds, train_indices)
         test_dataset  = Subset(test_ds, test_indices)
-        train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
-        test_loader  = DataLoader(test_dataset, batch_size=256, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+        test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=False)
 
         train_targets = np.array(full_dataset.targets)[train_indices]
         cls_num_list = [np.sum(train_targets == i) for i in range(100)]

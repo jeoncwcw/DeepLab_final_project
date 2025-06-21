@@ -20,7 +20,7 @@ def create_stage_scheduler(stage, epochs):
                     return float(epoch+1) / warmup_epochs
                 else:
                     progress = float(epoch - warmup_epochs) / float(max(1, epochs - warmup_epochs))
-                    return 0.5 * (1.0 + math.cos(math.pi * progress))
+                    return 0.5 * (1.0 + math.cos(math.pi * progress * 0.7))
             return stage2_scheduler
         case 3:
             def stage3_scheduler(epoch):
@@ -36,7 +36,7 @@ def get_stage_configs():
         },
         "stage2": { 
             "epochs": 60,
-            "lr": 0.06,
+            "lr": 0.02,
             "model_save_path": "./models_path/stage2_LDAM.pth"
         },
         "stage3": {
@@ -95,7 +95,7 @@ def create_config(model, cls_num_list=None):
         optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate, momentum = momentum, weight_decay=weight_decay)
         criterion = myLoss(mode="LDAM", cls_num_list=cls_num_list)
         scheduler = LambdaLR(optimizer, lr_lambda=cosine_annealing)
-        model_save_path = "./models_path/Base_unbalanced.pth"
+        model_save_path = "./models_path/Base_balanced.pth"
 
     else:
         learning_rate = 0.025

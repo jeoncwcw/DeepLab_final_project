@@ -95,8 +95,8 @@ class CifarResNet18_ThreeStage(nn.Module):
     def forward(self, x, inference_mode=False):
         features = self.encoder(x).flatten(1)
         if inference_mode:
-            # return self._confidence_based_prediction(features)
-            return self._fixed_softgate_logits(features)
+            return self._confidence_based_prediction(features)
+            # return self._fixed_softgate_logits(features)
 
         assert self.training_stage in [1, 2, 3]
         match self.training_stage:
@@ -123,7 +123,7 @@ class CifarResNet18_ThreeStage(nn.Module):
 
             use_ldam = (ldam_conf > cse_conf).unsqueeze(1).float()
             final_logits = use_ldam * ldam_logits + (1 - use_ldam) * cse_logits
-        return final_logits
+        return cse_logits
     
     def get_individual_predictions(self, x):
         features = self.encoder(x).flatten(1)
