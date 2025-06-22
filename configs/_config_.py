@@ -95,7 +95,7 @@ def create_config(model, cls_num_list=None):
         optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate, momentum = momentum, weight_decay=weight_decay)
         criterion = myLoss(mode="DRW_LDAM", cls_num_list=cls_num_list)
         scheduler = LambdaLR(optimizer, lr_lambda=cosine_annealing)
-        model_save_path = "./models_path/LDAM_unbalanced.pth"
+        model_save_path = "./models_path/LDAM_balanced.pth"
 
     else:
         learning_rate = 0.025

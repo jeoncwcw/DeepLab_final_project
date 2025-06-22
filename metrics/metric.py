@@ -1,6 +1,6 @@
 import torch
 
-def top_1_metric(model, test_loader, device, use_scl, inference_mode = None):
+def top_1_metric(model, test_loader, device, use_scl, inference_mode = "softgate"):
     model.eval()
     correct = 0
     total = 0
@@ -90,7 +90,7 @@ def evaluate_stage3_model(model, test_loader, device):
     
     return accuracy, ldam_accuracy, cse_accuracy
 
-def acc_stage_model(model, test_loader, device, head_tail=None):
+def acc_stage_model(model, test_loader, device, head_tail=False):
     model.eval()
     correct_ldam = 0
     correct_cse  = 0
@@ -108,8 +108,8 @@ def acc_stage_model(model, test_loader, device, head_tail=None):
 
             outputs_ldam = model(images, inference_mode = "ldam");      _, predicted_ldam = torch.max(outputs_ldam.data, 1)
             outputs_cse  = model(images, inference_mode = "cse");       _, predicted_cse  = torch.max(outputs_cse.data, 1)
-            outputs_conf = model(images, inference_mode = "conf");      _, predicted_conf = torch.max(outputs_conf.data, 1)
-            outputs_soft = model(images, inference_mode = "soft");      _, predicted_soft = torch.max(outputs_soft.data, 1)
+            outputs_conf = model(images, inference_mode = "confidence");      _, predicted_conf = torch.max(outputs_conf.data, 1)
+            outputs_soft = model(images, inference_mode = "softgate");      _, predicted_soft = torch.max(outputs_soft.data, 1)
 
             total += labels.size(0)
 
@@ -128,7 +128,7 @@ def acc_stage_model(model, test_loader, device, head_tail=None):
         accuracy_cse  = 100 * correct_cse.item()  / total
         accuracy_conf = 100 * correct_conf.item() / total
         accuracy_soft = 100 * correct_soft.item() / total
-    if head_tail is not None:    
+    if not (head_tail):    
         print(f"[LDAM classifier Accuracy]     {accuracy_ldam:.4f}%")
         print(f"[CSE classifier Accuracy]      {accuracy_cse:.4f}%")
         print(f"[Confidence Strategy Accuracy] {accuracy_conf:.4f}%")

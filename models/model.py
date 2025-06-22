@@ -130,7 +130,7 @@ class CifarResNet18_ThreeStage(nn.Module):
 
             use_ldam = (ldam_conf > cse_conf).unsqueeze(1).float()
             final_logits = use_ldam * ldam_logits + (1 - use_ldam) * cse_logits
-        return ldam_logits
+        return final_logits
     
     def get_individual_predictions(self, x):
         features = self.encoder(x).flatten(1)

@@ -38,7 +38,7 @@ class LDAMLoss(nn.Module):
 
 class DRWLDAMLoss(nn.Module):
     """DRW가 적용된 LDAM Loss - 개선된 버전"""
-    def __init__(self, cls_num_list, max_m=1, s=30, drw_start_ratio=0.6):
+    def __init__(self, cls_num_list, max_m=0.5, s=30, drw_start_ratio=0.75):
         super(DRWLDAMLoss, self).__init__()
         self.cls_num_list = cls_num_list
         self.max_m = max_m
@@ -106,7 +106,7 @@ class DRWLDAMLoss(nn.Module):
         return WeightedLDAMLoss(
             cls_num_list=self.cls_num_list, 
             max_m=0.8,  # Enhanced margin
-            s=30,       # Enhanced scaling
+            s=40,       # Enhanced scaling
             class_weights=self.class_weights
         )
     
