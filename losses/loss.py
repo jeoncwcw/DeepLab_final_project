@@ -36,6 +36,87 @@ class LDAMLoss(nn.Module):
         output = self.s * x_m
         return nn.CrossEntropyLoss()(output, target)
 
+class DRWLDAMLoss(nn.Module):
+    """DRW가 적용된 LDAM Loss - 개선된 버전"""
+    def __init__(self, cls_num_list, max_m=1, s=30, drw_start_ratio=0.6):
+        super(DRWLDAMLoss, self).__init__()
+        self.cls_num_list = cls_num_list
+        self.max_m = max_m
+        self.s = s
+        self.drw_start_ratio = drw_start_ratio
+        self.current_epoch = 0
+        self.total_epochs = 60  # 기본값, update_epoch에서 갱신됨
+        
+        # 기본 LDAM 설정 (초기)
+        self.base_ldam = LDAMLoss(cls_num_list, max_m, s)
+        
+        # DRW용 클래스 가중치 미리 계산
+        weights = 1.0 / np.array(cls_num_list)
+        weights = weights / np.sum(weights) * len(cls_num_list)
+        self.class_weights = torch.FloatTensor(weights)
+        if torch.cuda.is_available():
+            self.class_weights = self.class_weights.cuda()
+        
+        # Enhanced LDAM (DRW 적용 시 사용) - 미리 생성해서 재사용
+        self.enhanced_ldam = None
+        self.drw_active = False
+    
+    def update_epoch(self, epoch, total_epochs):
+        """에폭 정보 업데이트 및 DRW 상태 확인"""
+        self.current_epoch = epoch
+        self.total_epochs = total_epochs
+        
+        drw_start_epoch = int(self.total_epochs * self.drw_start_ratio)
+        
+        # DRW 상태가 변경되었을 때만 enhanced_ldam 생성
+        if epoch >= drw_start_epoch and not self.drw_active:
+            self.drw_active = True
+            # Enhanced LDAM with class weights 생성 (한 번만)
+            self.enhanced_ldam = self._create_weighted_ldam()
+            print(f"[DRW Activated] Epoch {epoch+1}: Enhanced LDAM with class reweighting applied")
+    
+    def _create_weighted_ldam(self):
+        """가중치가 적용된 LDAM 생성"""
+        class WeightedLDAMLoss(nn.Module):
+            def __init__(self, cls_num_list, max_m, s, class_weights):
+                super().__init__()
+                # Enhanced margin 설정
+                m_list = 1.0 / np.sqrt(np.sqrt(cls_num_list))
+                m_list = m_list * (max_m / np.max(m_list))
+                m_list = torch.FloatTensor(m_list)
+                if torch.cuda.is_available():
+                    m_list = m_list.cuda()
+                self.m_list = m_list
+                self.s = s
+                self.class_weights = class_weights
+            
+            def forward(self, x, target):
+                # LDAM margin 적용
+                batch_margins = self.m_list[target]
+                index_mask = torch.zeros_like(x, dtype=torch.bool)
+                index_mask.scatter_(1, target.data.view(-1, 1), 1)
+                
+                x_m = x.clone()
+                x_m[index_mask] -= batch_margins
+                output = self.s * x_m
+                
+                # 가중치가 적용된 CrossEntropyLoss 사용
+                return nn.CrossEntropyLoss(weight=self.class_weights)(output, target)
+        
+        return WeightedLDAMLoss(
+            cls_num_list=self.cls_num_list, 
+            max_m=0.8,  # Enhanced margin
+            s=30,       # Enhanced scaling
+            class_weights=self.class_weights
+        )
+    
+    def forward(self, x, target):
+        if self.drw_active and self.enhanced_ldam is not None:
+            # DRW 적용: Enhanced LDAM with class weights
+            return self.enhanced_ldam(x, target)
+        else:
+            # 일반 LDAM (초기 단계)
+            return self.base_ldam(x, target)
 
 
 class SupConLoss(nn.Module):
@@ -115,6 +196,10 @@ def myLoss(mode = "CrossEntropy", cls_num_list=None):
         if cls_num_list is None:
             raise ValueError("[LDAM Loss를 위해선 cls_num_list 필요]")
         return LDAMLoss(cls_num_list=cls_num_list)
+    elif mode.lower() == "drw_ldam":  # 새로운 모드 추가
+        if cls_num_list is None:
+            raise ValueError("[DRW LDAM Loss를 위해선 cls_num_list 필요]")
+        return DRWLDAMLoss(cls_num_list=cls_num_list)
     elif mode.lower() == "scl":
         if cls_num_list:
             return SupConLoss(temperature=0.05, cls_num_list=cls_num_list)

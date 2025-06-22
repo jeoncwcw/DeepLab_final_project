@@ -5,8 +5,8 @@ from losses.loss import myLoss
 
 def create_stage_scheduler(stage, epochs):
     warmup_epochs = 5
-    match stage:
-        case 1:
+    assert stage in [1,2,3]
+    if stage == 1:
             def stage1_scheduler(epoch):
                 if epoch < warmup_epochs:
                     return float(epoch+1) / warmup_epochs
@@ -14,7 +14,7 @@ def create_stage_scheduler(stage, epochs):
                     progress = float(epoch - warmup_epochs) / float(max(1, epochs - warmup_epochs))
                     return 0.5 * (1.0 + math.cos(math.pi * progress))
             return stage1_scheduler
-        case 2:
+    elif stage == 2:
             def stage2_scheduler(epoch):
                 if epoch < warmup_epochs:
                     return float(epoch+1) / warmup_epochs
@@ -22,7 +22,7 @@ def create_stage_scheduler(stage, epochs):
                     progress = float(epoch - warmup_epochs) / float(max(1, epochs - warmup_epochs))
                     return 0.5 * (1.0 + math.cos(math.pi * progress * 0.7))
             return stage2_scheduler
-        case 3:
+    elif stage == 3:
             def stage3_scheduler(epoch):
                 return 1 - (epoch/epochs)
             return stage3_scheduler
@@ -51,12 +51,12 @@ def create_stage_config(stage, cls_num_list, model):
     stage_configs = get_stage_configs()
     config = stage_configs[f"stage{stage}"]
 
-    match stage:
-        case 1:
+    assert stage in [1,2,3]
+    if stage == 1:
             criterion = myLoss(mode="SCL", cls_num_list=cls_num_list)
-        case 2:
-            criterion = myLoss(mode="LDAM", cls_num_list=cls_num_list)
-        case 3:
+    elif stage == 2:
+            criterion = myLoss(mode="DRW_LDAM", cls_num_list=cls_num_list)
+    elif stage == 3:
             criterion = myLoss(mode="CrossEntropy")
     
     optimizer = torch.optim.SGD(model.parameters(), lr=config["lr"], momentum=0.9, weight_decay=5e-4)
@@ -76,7 +76,7 @@ def create_stage_config(stage, cls_num_list, model):
 
 def create_config(model, cls_num_list=None):
     warmup_epochs = 5
-    epochs = 150
+    epochs = 100
     momentum = 0.9
     weight_decay = 5e-4
 
@@ -93,9 +93,9 @@ def create_config(model, cls_num_list=None):
         learning_rate = 0.1
 
         optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate, momentum = momentum, weight_decay=weight_decay)
-        criterion = myLoss(mode="LDAM", cls_num_list=cls_num_list)
+        criterion = myLoss(mode="DRW_LDAM", cls_num_list=cls_num_list)
         scheduler = LambdaLR(optimizer, lr_lambda=cosine_annealing)
-        model_save_path = "./models_path/Base_balanced.pth"
+        model_save_path = "./models_path/LDAM_unbalanced.pth"
 
     else:
         learning_rate = 0.025
@@ -103,7 +103,7 @@ def create_config(model, cls_num_list=None):
         optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate, momentum = momentum, weight_decay=weight_decay)
         criterion = myLoss(mode="CrossEntropy")
         scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 1 - (epoch/epochs))
-        model_save_path = "./models_path/LDAM_unbalanced.pth"
+        model_save_path = "./models_path/Base_unbalanced.pth"
 
     full_config = {
         "epochs": epochs,

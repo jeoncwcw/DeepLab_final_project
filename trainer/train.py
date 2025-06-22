@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
+from torch.utils.data import DataLoader, Subset
 
 def test_loss_cal(model, test_loader, criterion, device):
     model.eval()
@@ -28,6 +29,41 @@ def test_loss_cal(model, test_loader, criterion, device):
     test_loss = test_loss / count
     model.train()
     return test_loss
+
+def create_finetune_loader(train_loader, cls_num_list):
+    print("=== Creating a new balanced dataloader for fine-tuning ===")
+    tail_class_start_index = 67
+    avg_tail_count = int(np.mean(cls_num_list[tail_class_start_index:]))
+    new_balanced_indices = list()
+    original_train_indices = train_loader.dataset.indices
+    all_targets = np.array(train_loader.dataset.dataset.targets)
+
+    indices_by_class = {i: [] for i in range(100)}
+    for idx in original_train_indices:
+        label = all_targets[idx]
+        indices_by_class[label].append(idx)
+
+    for i in range(100):
+        indices_for_class_i = indices_by_class[i]
+        if i < tail_class_start_index:
+            sampled_indices = np.random.choice(indices_for_class_i, avg_tail_count, replace=False)
+            new_balanced_indices.extend(sampled_indices)
+        else:
+            new_balanced_indices.extend(indices_for_class_i)
+
+    new_subset = Subset(train_loader.dataset.dataset, new_balanced_indices)
+
+    import platform
+    num_workers=0 if platform.system() == 'Windows' else train_loader.num_workers
+    new_train_loader = DataLoader(
+        new_subset,
+        batch_size = train_loader.batch_size,
+        shuffle=True,
+        num_workers=num_workers
+    )
+    print("=== Done ===\n")
+    return new_train_loader
+
 
 def compute_intra_class_variance(features, labels, num_classes=100):
         variances = []
@@ -66,6 +102,8 @@ def myTrainer(model, train_loader, test_loader, device, config):
     print("=== Single Loss Training Start ===")
     model.train()
     for epoch in range(epochs):
+        if hasattr(criterion, 'update_epoch'):
+                criterion.update_epoch(epoch, epochs)
         total_loss = 0.0
         for image, label in train_loader:
             image = image.to(device)
@@ -83,7 +121,7 @@ def myTrainer(model, train_loader, test_loader, device, config):
         print(f"[epoch {epoch+1}] train_loss: {total_loss/len(train_loader):.4f}, test_loss: {test_loss:.4f}")
         train_losses.append(total_loss/len(train_loader))
         test_losses.append(test_loss)
-        if test_loss < best_loss:
+        if test_loss < best_loss and epoch > 75:
             best_loss = test_loss
             torch.save(model.state_dict(), model_save_path)
             print("[Best Model Saved!]")
@@ -112,7 +150,8 @@ def three_stage_trainer(model, train_loader, test_loader, device, cls_num_list,
 
     for stage in stages_to_run:
         print(f"\n === Stage{stage} Training Start ===")
-        
+        if stage == 3:
+            train_loader = create_finetune_loader(train_loader, cls_num_list)
         model.set_training_stage(stage)
         config = create_stage_config(stage, cls_num_list, model)
 
@@ -125,6 +164,8 @@ def three_stage_trainer(model, train_loader, test_loader, device, cls_num_list,
         best_loss = float('inf')
 
         for epoch in range(epochs):
+            if hasattr(criterion, 'update_epoch'):
+                criterion.update_epoch(epoch, epochs)
             model.train()
             total_loss = 0.0
 
@@ -132,15 +173,14 @@ def three_stage_trainer(model, train_loader, test_loader, device, cls_num_list,
                 labels = labels.to(device)
                 optimizer.zero_grad()
                 
-                match stage:
-                    case 1:
+                if stage == 1:
                         images = torch.cat([data[0], data[1]], dim=0).to(device)
                         scl_features = model(images)
                         f1, f2 = torch.chunk(scl_features, 2, dim=0)
                         loss_scl = criterion(torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1), labels)
                         loss_scl.backward(retain_graph=True)
                         total_loss += loss_scl.item()
-                    case 2:
+                elif stage == 2:
                         if isinstance(data, (list, tuple)):
                             images = data[0].to(device)
                         else:
@@ -149,7 +189,7 @@ def three_stage_trainer(model, train_loader, test_loader, device, cls_num_list,
                         loss_ldam = criterion(logits, labels)
                         loss_ldam.backward()
                         total_loss += loss_ldam.item()
-                    case 3:
+                elif stage == 3:
                         if isinstance(data, (list, tuple)):
                             images = data[0].to(device)
                         else:
@@ -191,7 +231,7 @@ def three_stage_trainer(model, train_loader, test_loader, device, cls_num_list,
             if stage == 1:
                 pass
             else:
-                if test_loss < best_loss:
+                if test_loss < best_loss and epoch > 36:
                     best_loss = test_loss
                     torch.save(model.state_dict(), model_save_path)
                     print(f"[Best Model Saved!] Stage {stage}")

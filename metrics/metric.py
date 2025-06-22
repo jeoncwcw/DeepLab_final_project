@@ -1,6 +1,6 @@
 import torch
 
-def top_1_metric(model, test_loader, device, use_scl):
+def top_1_metric(model, test_loader, device, use_scl, inference_mode = None):
     model.eval()
     correct = 0
     total = 0
@@ -12,7 +12,7 @@ def top_1_metric(model, test_loader, device, use_scl):
                 images = images.to(device)
             labels = labels.to(device)
             if hasattr(model, 'training_stage'):
-                outputs = model(images, inference_mode=True)
+                outputs = model(images, inference_mode=inference_mode)
             elif hasattr(model, 'use_scl') and model.use_scl:
                 _, outputs = model(images)
             else:
@@ -69,7 +69,7 @@ def evaluate_stage3_model(model, test_loader, device):
             cse_logits = model.cse_classifier(features)
             
             # 최종 예측 (모델의 inference 활용)
-            final_outputs = model(images, inference_mode=True)
+            final_outputs = model(images, inference_mode="confidence")
             
             _, final_pred = final_outputs.max(1)
             _, ldam_pred = ldam_logits.max(1)
@@ -89,3 +89,50 @@ def evaluate_stage3_model(model, test_loader, device):
     print(f"CSE 분류기 정확도: {cse_accuracy:.2f}%")
     
     return accuracy, ldam_accuracy, cse_accuracy
+
+def acc_stage_model(model, test_loader, device, head_tail=None):
+    model.eval()
+    correct_ldam = 0
+    correct_cse  = 0
+    correct_conf = 0
+    correct_soft = 0
+    total = 0
+
+    with torch.no_grad():
+        for images, labels in test_loader:
+            if isinstance(images, (list, tuple)):
+                images = images[0].to(device)
+            else:
+                images = images.to(device)
+            labels = labels.to(device)
+
+            outputs_ldam = model(images, inference_mode = "ldam");      _, predicted_ldam = torch.max(outputs_ldam.data, 1)
+            outputs_cse  = model(images, inference_mode = "cse");       _, predicted_cse  = torch.max(outputs_cse.data, 1)
+            outputs_conf = model(images, inference_mode = "conf");      _, predicted_conf = torch.max(outputs_conf.data, 1)
+            outputs_soft = model(images, inference_mode = "soft");      _, predicted_soft = torch.max(outputs_soft.data, 1)
+
+            total += labels.size(0)
+
+            if torch.cuda.is_available():
+                correct_ldam += (predicted_ldam.cpu() == labels.cpu()).sum()
+                correct_cse  += (predicted_cse.cpu()  == labels.cpu()).sum()
+                correct_conf += (predicted_conf.cpu() == labels.cpu()).sum()
+                correct_soft += (predicted_soft.cpu() == labels.cpu()).sum()
+            else:
+                correct_ldam += (predicted_ldam == labels).sum()
+                correct_cse  += (predicted_cse  == labels).sum()
+                correct_conf += (predicted_conf == labels).sum()
+                correct_soft += (predicted_soft == labels).sum()
+
+        accuracy_ldam = 100 * correct_ldam.item() / total
+        accuracy_cse  = 100 * correct_cse.item()  / total
+        accuracy_conf = 100 * correct_conf.item() / total
+        accuracy_soft = 100 * correct_soft.item() / total
+    if head_tail is not None:    
+        print(f"[LDAM classifier Accuracy]     {accuracy_ldam:.4f}%")
+        print(f"[CSE classifier Accuracy]      {accuracy_cse:.4f}%")
+        print(f"[Confidence Strategy Accuracy] {accuracy_conf:.4f}%")
+        print(f"[Softgate Strategy Accuracy]   {accuracy_soft:.4f}")
+    else:
+        return accuracy_ldam, accuracy_cse, accuracy_conf, accuracy_soft
+

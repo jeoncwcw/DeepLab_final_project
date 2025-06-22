@@ -63,8 +63,7 @@ class CifarResNet18_ThreeStage(nn.Module):
     def set_training_stage(self, stage):
         self.training_stage = stage
         assert stage in [1, 2, 3]
-        match stage:
-            case 1:
+        if stage == 1:
                 for param in self.encoder.parameters():
                     param.requires_grad = True
                 for param in self.projection_head.parameters():
@@ -73,7 +72,7 @@ class CifarResNet18_ThreeStage(nn.Module):
                     param.requires_grad = False
                 for param in self.cse_classifier.parameters():
                     param.requires_grad = False
-            case 2:
+        elif stage == 2:
                 for param in self.encoder.parameters():
                     param.requires_grad = False
                 for param in self.projection_head.parameters():
@@ -82,7 +81,7 @@ class CifarResNet18_ThreeStage(nn.Module):
                     param.requires_grad = True
                 for param in self.cse_classifier.parameters():
                     param.requires_grad = False
-            case 3:
+        elif stage == 3: 
                 for param in self.encoder.parameters():
                     param.requires_grad = False
                 for param in self.projection_head.parameters():
@@ -92,21 +91,29 @@ class CifarResNet18_ThreeStage(nn.Module):
                 for param in self.cse_classifier.parameters():
                     param.requires_grad = True
                 
-    def forward(self, x, inference_mode=False):
+    def forward(self, x, inference_mode=None):
         features = self.encoder(x).flatten(1)
-        if inference_mode:
-            return self._confidence_based_prediction(features)
-            # return self._fixed_softgate_logits(features)
-
-        assert self.training_stage in [1, 2, 3]
-        match self.training_stage:
-            case 1:
-                scl_features = F.normalize(self.projection_head(features), dim=1)
-                return scl_features
-            case 2:
+        if inference_mode is not None:
+            assert inference_mode in ["confidence", "softgate", "ldam", "cse"]
+            if inference_mode == "confidence":
+                return self._confidence_based_prediction(features)
+            elif inference_mode == "softgate":
+                return self._fixed_softgate_logits(features)
+            elif inference_mode == "ldam":
                 ldam_logits = self.ldam_classifier(features)
                 return ldam_logits
-            case 3:
+            elif inference_mode == "cse":
+                cse_logits = self.cse_classifier(features)
+                return cse_logits
+
+        assert self.training_stage in [1, 2, 3]
+        if self.training_stage == 1:
+                scl_features = F.normalize(self.projection_head(features), dim=1)
+                return scl_features
+        elif self.training_stage == 2:
+                ldam_logits = self.ldam_classifier(features)
+                return ldam_logits
+        elif self.training_stage == 3:
                 cse_logits = self.cse_classifier(features)
                 return cse_logits
         
@@ -123,7 +130,7 @@ class CifarResNet18_ThreeStage(nn.Module):
 
             use_ldam = (ldam_conf > cse_conf).unsqueeze(1).float()
             final_logits = use_ldam * ldam_logits + (1 - use_ldam) * cse_logits
-        return cse_logits
+        return ldam_logits
     
     def get_individual_predictions(self, x):
         features = self.encoder(x).flatten(1)
