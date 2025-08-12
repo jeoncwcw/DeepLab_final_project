@@ -1,6 +1,5 @@
-# DeepLab Final Project
-**EEE 4423 Deep Learning Laboratory – Final Project**
----
+# **EEE 4423 Deep Learning Laboratory – Final Project**
+
 **Report:**  
 [Supcon-Guided Hybrid Classification for Tail-aware Representation Learning](./Supcon-Guided%20Hybrid%20Classification%20for%20Tail-aware%20Representation%20Learning.pdf)
 
@@ -27,7 +26,7 @@ Among these, `stage3_CSE.pth` is recognised as the best-performing model. It eff
 
 ---
 
-### **Multi-Stage Model Architecture**
+## **Multi-Stage Model Architecture**
 The multi‑stage model is specifically designed to cope with skewed class distributions. It proceeds through three distinct phases:
 1. **Stage 1** – SupCon Loss: Encourages greater inter-class separability.
 2. **Stage 2** – LDAM Loss: Places additional emphasis on underrepresented tail classes.
@@ -36,7 +35,7 @@ Each stage employs a different loss function and data subset, progressively refi
 
 ---
 
-## 🔧 **Usage Instructions**
+## **Usage Instructions**
 1. Run the evaluation notebook: Open and execute `Model_tester.ipynb` to load the pre‑trained models and generate performance metrics.
 2. Interpret results: Review the reported accuracy and relative accuracy to compare model performance. The evaluation should confirm that `stage3_CSE.pth` attains the highest metrics.
 
