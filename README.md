@@ -1,4 +1,4 @@
-# **EEE 4423 Deep Learning Laboratory – Final Project**
+# **EEE 4423 Deep Learning LAB – Final Project**
 
 **Report:**  
 [Supcon-Guided Hybrid Classification for Tail-aware Representation Learning](./Supcon-Guided%20Hybrid%20Classification%20for%20Tail-aware%20Representation%20Learning.pdf)
